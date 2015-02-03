@@ -75,5 +75,20 @@ Optional: Mesos_cluster (+ Marathon)
 Mesos + Marathon:
 -----------------
 
-Make sure
+Specify in the env variables the following:
+
+Required:
+
+- CLUSTER
+- ETCD_HOST
+- HOST (mesos already passes this one)
+
+OPTIONAL:
+
+- DATA_DIR
+- MYSQL_USER
+- MYSQL_PASS
+- REP_USER
+- REP_PASS
+- HOST
 
