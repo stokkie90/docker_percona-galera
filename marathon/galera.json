@@ -1,0 +1,54 @@
+
+{
+	"id": "/databases",
+	"container": {
+		"type": "DOCKER",
+		"docker": {
+			"image": "rickstok/percona_galera:0.0.13",
+			"network": "BRIDGE",
+			"portMappings": [
+				{ "containerPort": 3306, "hostPort": 3306, "servicePort": 3307, "protocol": "tcp" },
+				{ "containerPort": 4444, "hostPort": 4444, "protocol": "tcp" },
+				{ "containerPort": 4567, "hostPort": 4567, "protocol": "tcp" },
+				{ "containerPort": 4568, "hostPort": 4568, "protocol": "tcp" }
+			]
+		},
+		"volumes": [
+			{
+				"containerPath": "/data",
+				"hostPath": "/ceph/database/",
+				"mode": "RW"
+			},
+			{
+				"containerPath": "/opt/checks",
+				"hostPath": "/opt/checks/",
+				"mode": "RO"
+			}
+		]
+	},
+	"env": {
+		"CLUSTER": "stokieedddbb",
+		"MARATHON_URL": "http://192.168.42.10:8080/v2/",
+		"DATA_DIR": "/data",
+		"ETCD_HOST": "192.168.42.10",
+		"DEBUG": "true",
+		"MYSQL_USER": "admin",
+		"MYSQL_PASS": "admin"
+	},
+	"instances": 3,
+	"cpus": 0.5,
+	"mem": 512,
+	"healthChecks": [
+		{
+			"protocol": "COMMAND",
+			"command": { "value": "/opt/checks/clustercheck.sh $HOST $PORT_3306 $MYSQL_USER $MYSQL_PASS" },
+			"gracePeriodSeconds": 120,
+			"intervalSeconds": 60,
+			"timeoutSeconds": 20,
+			"maxConsecutiveFailures": 3
+		}
+	],
+	"constraints": [
+		["hostname", "UNIQUE"]
+	]
+}

@@ -1,0 +1,36 @@
+
+{
+	"id": "/etcd",
+	"container": {
+		"type": "DOCKER",
+		"docker": {
+			"image": "quay.io/philipsoutham/etcd:latest",
+			"network": "BRIDGE",
+			"privileged": true,
+			"portMappings": [
+				{ "containerPort": 4001, "hostPort": 31001, "servicePort": 4001, "protocol": "tcp" },
+				{ "containerPort": 7001, "hostPort": 31002, "servicePort": 7001, "protocol": "tcp" }
+			]
+		},
+		"volumes": [
+			{
+				"containerPath": "/data",
+				"hostPath": "/ceph/etcd/data",
+				"mode": "RW"
+			}
+		]
+	},
+	"args": [
+		"-addr=0.0.0.0:4001", 
+		"-peer-addr=0.0.0.0:7001", 
+		"-data-dir=/data",
+		"-name=etcd_master"
+		
+	],
+	"instances": 1,
+	"cpus": 0.2,
+	"mem": 64,
+	"constraints": [
+		["hostname", "UNIQUE"]
+	]
+}
