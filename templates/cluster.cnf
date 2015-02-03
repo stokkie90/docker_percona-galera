@@ -1,3 +1,7 @@
+[mysqld_safe]
+port=3307
+
+
 [mysqld]
 query_cache_size=0
 binlog_format=ROW
@@ -5,19 +9,23 @@ default-storage-engine=innodb
 innodb_autoinc_lock_mode=2
 query_cache_type=0
 bind-address=0.0.0.0
+port=__port__
+wait_timeout=3660
 
 # Galera Provider Configuration
 wsrep_provider=/usr/lib/libgalera_smm.so
 wsrep_slave_threads=2
 
 # Galera Cluster Configuration
-wsrep_cluster_name="{{ .database_cluster_name }}"
+wsrep_cluster_name="__clustername__"
 wsrep_cluster_address="gcomm://"
+wsrep_node_address="__wsrep_node_address__"
 
 # Galera Synchronization Congifuration
-wsrep_sst_auth={{ .database_credentials_repUser }}:{{ .database_credentials_repPass }}
+wsrep_sst_auth=__repUser__:__repPass__
 wsrep_certify_nonPK=1
 wsrep_convert_LOCK_to_trx=0
 wsrep_auto_increment_control=1
 wsrep_causal_reads=0
-wsrep_sst_method=xtrabackup
+wsrep_sst_method=xtrabackup-v2
+

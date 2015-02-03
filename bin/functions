@@ -8,6 +8,52 @@ function etcd_make_directory {
   etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
 }
 
+function update_mysql_config {
+	if [[ -d /etc/mysql/conf.d ]]; then
+		echo "mysql/conf.d Dir already exist"
+	else
+		mkdir -p /etc/mysql/conf.d
+	fi
+	local cluster_name=$(etcdctl $ETCD_OPTIONS get $ETCD_PATH/cluster/name)
+	if [ $DATA_DIR != '/var/lib/mysql' ]; then
+		datadir=$DATA_DIR/$HOST
+	else
+		datadir=/var/lib/mysql
+	fi 
+	
+	cp /app/templates/cluster.cnf /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_clustername\_\_/$cluster_name/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_port\_\_/$PORT_3306/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_repUser\_\_/$REP_USER/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_repPass\_\_/$REP_PASS/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/gcomm\:\/\//gcomm\:\/\/$CLUSTER_MEMBERS/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_wsrep_node_address\_\_/$HOST:$PORT_3306/g" /etc/mysql/conf.d/cluster.cnf
+	if grep -q "$datadir" /etc/mysql/conf.d/cluster.cnf; then
+		echo "datadir already succesfull added"
+	else
+		if [[ ! -d $datadir ]]; then
+			mkdir -p $datadir
+		fi
+		sed -i "s/datadir\.*//g" /etc/mysql/conf.d/cluster.cnf
+		echo "datadir=$datadir" >> /etc/mysql/conf.d/cluster.cnf
+	fi
+	
+	if grep -q "$HOST:$PORT_4444" /etc/mysql/conf.d/cluster.cnf; then
+		echo "wsrep_sst_recieve_address Already set"
+	else
+		sed -i "s/wsrep_sst_receive_address\.*//g" /etc/mysql/conf.d/cluster.cnf
+		echo "wsrep_sst_receive_address=$HOST:$PORT_4444" >> /etc/mysql/conf.d/cluster.cnf
+	fi
+	
+
+}
+
+function setup_wsrep {
+	sed -i "s/gcomm\:\/\//gcomm\:\/\/$CLUSTER_MEMBERS/g" /etc/mysql/conf.d/cluster.cnf
+	sed -i "s/\_\_wsrep_node_address\_\_/$HOST:$PORT_3306/g" /etc/mysql/conf.d/cluster.cnf
+}
+
+
 function on_exit() {
     kill -TERM $SERVICE_PID
     wait $SERVICE_PID 2>/dev/null
@@ -16,6 +62,7 @@ function on_exit() {
 
 function cluster_members() {
   CLUSTER_MEMBERS=
+ LIST=
   for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
     value=$(etcdctl --no-sync -C $ETCD get $key)
     LIST+="$(basename $value),"
@@ -28,29 +75,30 @@ function publish_to_etcd() {
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
   else
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:4567 --ttl $ETCD_TTL >/dev/null
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:$PORT_4567 --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PORT_3306 --ttl $ETCD_TTL >/dev/null 
   fi
 }
 
 function init_database() {
-  chown -R mysql:mysql /var/lib/mysql
-  if [[ ! -d /var/lib/mysql/mysql ]]; then
-    echo "==> An empty or uninitialized database is detected in /var/lib/mysql"
-    echo "-----> Creating database..."
-    mysql_install_db > /dev/null 2>&1
-    echo "-----> Done!"
-  else
-    echo "-----> Using an existing database"
-  fi
-  echo "==> starting mysql in order to set up passwords"
-  mysqld_safe --skip-syslog --verbose &
-  echo "-----> sleeping for 20 seconds, then testing if DB is up"
-  sleep 20
-  while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
-  [[ -z $HOST ]] && mysql_creds || /app/bin/database_creds
-  echo "==> stopping mysql after setting up passwords"
-  mysqladmin shutdown
+	chown -R mysql:mysql $datadir
+	if [[ ! -d $datadir/mysql ]]; then
+	  echo "==> An empty or uninitialized database is detected in $datadir"
+	  echo "-----> Creating database..."
+	  mysql_install_db > /dev/null 2>&1
+	  echo "-----> Done!"
+	else
+	  echo "-----> Using an existing database"
+	fi
+	echo "==> starting mysql in order to set up passwords"
+	mysqld_safe --skip-syslog --verbose &
+	echo "-----> sleeping for 20 seconds, then testing if DB is up"
+	sleep 20
+	while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+	#[[ -z $HOST ]]
+	mysql_creds #|| /app/bin/database_creds	
+	echo "==> stopping mysql after setting up passwords"	
+	mysqladmin shutdown	
 }
 
 function mysql_creds() {

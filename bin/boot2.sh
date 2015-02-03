@@ -19,9 +19,15 @@ MYSQL_USER=${MYSQL_USER:-admin}
 MYSQL_PASS=${MYSQL_PASS:-admin}
 REP_USER=${REP_USER:-replicator}
 REP_PASS=${REP_PASS:-replicator}
-PORT=${PUBLISH:-3306}
+PORT=${PORT_3306:-3306}
+PUBLISH=${PORT:-3306}
+PORT_4567=${PORT_4567:-4567}
+PORT_4444=${PORT_4444:-4444}
+PORT_3306=${PORT_3306:-3306}
 PROTO=${PROTO:-tcp}
 ETCD_HOST=${ETCD_HOST:-$HOST}
+DATA_DIR=${DATA_DIR:-/var/lib/mysql}
+HOSTNAME=${HOST:-$(hostname)}
 
 if [[ -z $HOST ]]; then
   echo '==> $HOST not set.  booting mysql without clustering.'
@@ -42,6 +48,7 @@ etcd_set_default credentials/repUser ${REP_USER}
 etcd_set_default credentials/repPass ${REP_PASS}
 etcd_set_default host $HOST
 etcd_set_default port $PORT
+etcd_set_default sst/$HOST/address $HOST:$PORT_4444
 
 if [[ ! -z $CLUSTER ]]; then
   etcd_set_default cluster/name ${CLUSTER}
@@ -49,11 +56,9 @@ if [[ ! -z $CLUSTER ]]; then
   etcd_make_directory cluster/galeraEndpoints
 fi
 
-# wait for confd to run once and install initial templates
-until confd -onetime -node $ETCD -config-file /app/confd.toml; do
-  echo "echo ==> database: waiting for confd to write initial templates..."
-  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
-done
+## Creaing / Updating mysql config ( doesnt use confd because it needs a etcd cluster)
+update_mysql_config
+
 
 # initialize data volume
 init_database
@@ -71,7 +76,7 @@ if [[ -z $CLUSTER_MEMBERS ]]; then
     echo "-----> Hurruh I win!"
     BOOTSTRAP=1
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/election/bootstrap $HOSTNAME --ttl 300 >/dev/null 2>&1
-    mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
+    mysqld --wsrep-new-cluster $WSREP_OPTIONS &
   else
     echo -n "-----> I lost election.  Waiting for leader."
     until [[ ! -z $CLUSTER_MEMBERS ]]; do
@@ -82,12 +87,16 @@ if [[ -z $CLUSTER_MEMBERS ]]; then
     echo "-----> leader ready.  Starting."
     sleep 5
     echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
+    setup_wsrep
     mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+	#service mysql start
   fi
 else
   cluster_members
   echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
-  mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+ setup_wsrep
+mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+#service mysql start
 fi
 
 
@@ -99,9 +108,9 @@ echo $SERVICE_PID > /app/database.pid
 trap on_exit INT TERM
 
 # spawn confd in the background to update services based on etcd changes
-confd -node $ETCD -config-file /app/confd.toml &
-CONFD_PID=$!
-
+#confd -node $ETCD -config-file /app/confd.toml &
+#CONFD_PID=$!
+#
 # wait for the service to become available
 echo "==> sleeping for 20 seconds, then testing if DB is up."
 sleep 20

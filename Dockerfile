@@ -1,10 +1,7 @@
 # This file creates a container that runs Database (Percona) with Galera Replication.
-#
-# Author: Paul Czarkowski
-# Date: 08/16/2014
 
-FROM ubuntu:trusty
-MAINTAINER Paul Czarkowski "paul@paulcz.net"
+FROM phusion/baseimage:latest
+MAINTAINER Rick Stokkingreef "rickstokking@gmail.com"
 
 # Base Deps
 RUN \
@@ -58,8 +55,11 @@ WORKDIR /app
 
 RUN chmod +x /app/bin/*
 
+RUN mkdir -p /etc/my_init.d
+ADD start.sh /etc/my_init.d/start.sh
+
 # Define default command.
-CMD ["/app/bin/boot"]
+CMD ["/sbin/my_init"]
 
 # Expose ports.
 EXPOSE 3306 4444 4567 4568
