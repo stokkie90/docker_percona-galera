@@ -9,11 +9,6 @@ If etcd is available it will automatically cluster itself with Galera and the Xt
 TODO
 ========
 
-	Update this Readme
-		Requirements
-	Include Marathon.json file
-	Upload to private Github
-	Autobuild on docker-registry??
 	Backup cronjob with Chronos??
 	
 
