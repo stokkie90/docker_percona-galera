@@ -92,3 +92,34 @@ OPTIONAL:
 - REP_PASS
 - HOST
 
+
+SWARM EXAMPLE:
+
+RUN ETCD: 
+
+	docker run -d \
+	--name=etcd \
+	-e SERVICE_NAME=etcd \
+	-p 4001:4001 \
+	-p 7001:7001 \
+	quay.io/philipsoutham/etcd:latest \
+	-addr=0.0.0.0:4001 \
+	-peer-addr=0.0.0.0:7001 \
+	-name=etcd_master
+	
+
+RUN DBS (3 times) (change HOST, NAME, CONSTRAIN)
+
+	docker run -d -e SERVICE_NAME=dbs \
+	-p 3306:3306 \
+	-p 4444:4444 \
+	-p 4567:4567 \
+	-p 4568:4568 \
+	-e CLUSTER=<CLUSTER_NAME> \
+	-e ETCD_HOST=<IP OF NODE WHERE ETCD IS RUNNING> \
+	-e DEBUG=true \
+	--name=<container-name> \
+	-e HOST=<IP of Host where it runs> \
+	-e constraint:node==<name of node> \
+	rickstok/docker_percona-galera
+
