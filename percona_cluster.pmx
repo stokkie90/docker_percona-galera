@@ -1,0 +1,30 @@
+---
+name: percona_cluster
+description: testing
+keywords: ''
+type: MySQL
+documentation: ''
+images:
+- name: db
+  source: rickstok/docker_percona-galera:latest
+  type: Default
+  ports:
+  - host_port: '3306'
+    container_port: '3306'
+    proto: TCP
+  - host_port: '4444'
+    container_port: '4444'
+    proto: TCP
+  - host_port: '4567'
+    container_port: '4567'
+    proto: TCP
+  - host_port: '4568'
+    container_port: '4568'
+    proto: TCP
+  environment:
+  - variable: CLUSTER
+    value: stokkiedb
+  - variable: ETCD_HOST
+    value: 10.245.1.2
+  - variable: DEBUG
+    value: 'true'
